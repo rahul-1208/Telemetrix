@@ -70,6 +70,32 @@ class QueryResponse(BaseModel):
         description="Tenant identifier"
     )
     
+    # New fields for actual data results
+    data: Optional[list] = Field(
+        None,
+        description="Actual data results from the SQL query"
+    )
+    
+    columns: Optional[list] = Field(
+        None,
+        description="Column names from the query results"
+    )
+    
+    row_count: Optional[int] = Field(
+        None,
+        description="Number of rows returned"
+    )
+    
+    error: Optional[str] = Field(
+        None,
+        description="Error message if query execution failed"
+    )
+    
+    natural_language_response: Optional[str] = Field(
+        None,
+        description="Human-readable answer generated from the data"
+    )
+    
     timestamp: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp when the response was generated"

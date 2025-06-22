@@ -1,8 +1,8 @@
 from openai import OpenAI
 import structlog
 from typing import Optional
-from models import SQLResult
-from config import settings
+from api_server.models import SQLResult
+from api_server.config import settings
 
 logger = structlog.get_logger()
 
@@ -202,4 +202,60 @@ class NLQService:
             if keyword in query_upper:
                 return False
         
-        return True 
+        return True
+    
+    async def generate_natural_language_response(self, question: str, sql_query: str, query_results: list) -> str:
+        """
+        Generate natural language response from SQL query results
+        
+        Args:
+            question: Original user question
+            sql_query: Generated SQL query
+            query_results: Results from SQL execution
+            
+        Returns:
+            Natural language response explaining the data
+        """
+        try:
+            # Format the results for the LLM
+            results_text = str(query_results) if query_results else "No data found"
+            
+            response_prompt = {
+                "role": "system",
+                "content": """You are a helpful data analyst assistant. Your job is to explain SQL query results in natural language.
+
+                Given a user's question and the results from a SQL query, provide a clear, concise, and helpful answer.
+                
+                Guidelines:
+                - Be conversational and friendly
+                - Include the actual numbers/data from the results
+                - Explain what the data means in business terms
+                - Keep responses under 3 sentences unless more detail is needed
+                - If no data is found, explain what that means
+                - Use appropriate units and formatting for numbers
+                """
+            }
+            
+            user_message = {
+                "role": "user",
+                "content": f"""User Question: {question}
+
+SQL Query: {sql_query}
+
+Query Results: {results_text}
+
+Please provide a natural language answer based on this data:"""
+            }
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[response_prompt, user_message],
+                temperature=0.3,
+                max_tokens=300
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.warning("Failed to generate natural language response", error=str(e))
+            return f"Based on the data, here are the results for your question: {question}" 

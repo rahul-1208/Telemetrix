@@ -7,9 +7,11 @@ from contextlib import asynccontextmanager
 import time
 from typing import Dict, Any
 
-from models import QueryRequest, QueryResponse, HealthResponse
-from services.nlq_service import NLQService
-from config import settings
+from api_server.models import QueryRequest, QueryResponse, HealthResponse
+from api_server.services.nlq_service import NLQService
+from api_server.services.complete_service import CompleteService
+from api_server.config import settings
+
 
 # Configure structured logging
 structlog.configure(
@@ -42,9 +44,10 @@ async def lifespan(app: FastAPI):
     # Initialize services
     try:
         app.state.nlq_service = NLQService()
-        logger.info("NLQ Service initialized successfully")
+        app.state.complete_service = CompleteService()
+        logger.info("Services initialized successfully")
     except Exception as e:
-        logger.error("Failed to initialize NLQ Service", error=str(e))
+        logger.error("Failed to initialize services", error=str(e))
         raise
     
     startup_time = time.time() - start_time
@@ -129,55 +132,50 @@ async def health_check():
     )
 
 @app.post("/api/v1/query", response_model=QueryResponse, tags=["Queries"])
-async def generate_sql_query(
+async def process_natural_language_query(
     request: QueryRequest,
-    nlq_service: NLQService = Depends(lambda: app.state.nlq_service)
+    complete_service: CompleteService = Depends(lambda: app.state.complete_service)
 ):
     """
-    Generate SQL query from natural language question
+    Process natural language query and return complete response
     
-    This endpoint takes a natural language question about product usage data
-    and generates a corresponding SQL query using AI.
+    This endpoint takes a natural language question about product usage data,
+    generates SQL, executes it, and returns a natural language response.
     """
     try:
-        logger.info("Processing query request",
+        logger.info("Processing complete query request",
                    question=request.question,
                    tenant_id=request.tenant_id,
                    request_id=getattr(request, 'request_id', 'unknown'))
         
-        # Generate SQL using NLQ service
-        sql_result = await nlq_service.generate_sql(
+        # Process the complete query flow
+        response = await complete_service.process_query(
             question=request.question,
             tenant_id=request.tenant_id
         )
         
-        logger.info("SQL generation completed",
+        logger.info("Complete query processing completed",
                    question=request.question,
-                   sql_generated=sql_result.sql_query,
+                   success=response.success,
+                   row_count=response.row_count,
                    request_id=getattr(request, 'request_id', 'unknown'))
         
-        return QueryResponse(
-            success=True,
-            question=request.question,
-            sql_query=sql_result.sql_query,
-            explanation=sql_result.explanation,
-            tenant_id=request.tenant_id
-        )
+        return response
         
     except Exception as e:
-        logger.error("SQL generation failed",
+        logger.error("Complete query processing failed",
                     question=request.question,
                     error=str(e),
                     request_id=getattr(request, 'request_id', 'unknown'))
         
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate SQL query: {str(e)}"
+            detail=f"Failed to process query: {str(e)}"
         )
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        "api_server.main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,

@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+from pathlib import Path
 
 class Settings(BaseSettings):
     """Application settings with environment variable support"""
@@ -20,8 +21,14 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = 0.2
     OPENAI_MAX_TOKENS: int = 1000
     
-    # Database Configuration (for future use)
+    # Database Configuration
     DATABASE_URL: str = ""
+    DB_HOST: str = ""
+    DB_PORT: str = ""
+    DB_NAME: str = ""
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
+    DB_SSL_MODE: str = "require"
     
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -30,8 +37,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     
     class Config:
-        env_file = ".env"
+        # Look for .env file in the api_server directory
+        env_file = str(Path(__file__).parent / ".env")
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields from .env file
 
 # Create settings instance
 settings = Settings() 
